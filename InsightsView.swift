@@ -1,281 +1,368 @@
-//
-//  InsightsView.swift
-//  ExpenseTracker
-//
-//  Created by Suhana Gupta on 1/7/26.
-//
+
 
 import SwiftUI
 import Charts
 
 struct InsightsView: View {
-    @State private var allExpenses: [Expense] = []
-    @State private var newAmount: String = ""
-    @State private var newCategory: String = ""
+    // in order th=o access allExpenses list, amounts, cats, etc. - belongs to view as well
+    @EnvironmentObject var viewModel: BudgetViewModel
     @State private var showAddExpense = false
     
-    let categoryColors: [String: Color] = [
-        "Food": .yellow,
-        "Groceries": .green,
-        "Transportation": .orange,
-        "Clothes": .pink,
-        "Entertainment": .purple,
-        "Rent": .brown,
-        "Other": .gray
-    ]
+    /*
+     BUDGET HEADER
+     */
+    //@State private var showingBudgetEditor = false
+    @State private var draftBudget = ""
+    @State private var isEditingBudget = false
+    @FocusState private var budgetFieldFocused: Bool
     
-    // *** COMPLETE TOTAL EXPENSE of all months
+    @Environment(ThemeManager.self) private var theme
+
     
-    /* allExpenses.reduce(0) {$0 + $1.amount} -> reduce is a function that provides initial acc value of 0. $0 = first parameter passed into expenses, $1 = second parameter or current element being processed from array */
-    var totalExp: Double {
-        allExpenses.reduce(0) {
-            $0 + $1.amount
-        }
-    }
+
     
-    //*** CURRENT MONTH EXPENSE
-    var currMonthExpList: [Expense] {
-        let calendar = Calendar.current
-        let currentDate = Date()
+/* VAR categoryGroups:
+ purpose - get CURRENT month's categories and their amounts to add data to the PIE CHART
+ output - array of dictionary of [(catgeory : amount in cat)]
+ */
+    var categoryGroups: [(category: Category, amount: Double)] {
+        // go through the allExpenses and filter using uuid (each category has a uuid - not using cat's name bc user can update the cat's name, but the past expenses under cat would have the old name, thus messing the order of teh pie chart
         
-        let monthInt = calendar.component(.month, from: currentDate)
+        // dictionary to get the acc totals of each cat
+        var categoryTotals: [UUID: Double] = [:]
         
-        var expInMonth: [Expense] = []
-        
-        for expense in allExpenses {
-            let expenseMonth = calendar.component(.month, from: expense.date)
-            
-            if (expenseMonth == monthInt) {
-                expInMonth.append(expense)
+        // for each expense, if uuid NOT in catTotals, add and initialize the amount, ELSE if uuid IN catTotals, update the amount total
+        for expense in viewModel.currentMonthExpensesList {
+            // if the cat exists w its curr total, then add the new one to the existing total
+            if let existing = categoryTotals[expense.categoryID] {
+                categoryTotals[expense.categoryID] = existing + expense.amount
+            }
+            else { // else add new cat to dict
+                categoryTotals[expense.categoryID] = expense.amount
             }
         }
-        return expInMonth
-    }
-    
-    //*** TOTAL MONTH'S EXPENSE
-    var currMonthExp: Double {
-        currMonthExpList.reduce(0) {
-            $0 + $1.amount
+        
+        // sort the list largest -> least
+        // compactMap used for category lookup - what if cat was deleted...
+        return categoryTotals.compactMap {id, amount in guard let category = viewModel.category(withID: id)
+                                                                // guard bc viewModel.cat returns Category? if cat was deleted
+                                                                
+            else {return nil}
+            return (category: category, amount: amount)
         }
+        .sorted {$0.amount > $1.amount
+        }
+    }
+        
+    
+    /* VAR topCategory
+     purpose - to get the category with the most expenses/largest amount
+     output - string
+     */
+    var topCategory: String {
+        guard let topCat = categoryGroups.first else {
+            return "No expenses have been made yet"
+        }
+        return topCat.category.name
     }
     
     /*
-     FUNCTIONS/HELPERS ---------------------------------------
+     VAR recurringCategory
+     purpose - get the category with the recurring expense aka, category that has the most entries, regardless of the amount
+     output - string
+     how - get the category that shows up the most in currmonthexplist and keep a dict w (category : #)
+     */
+    var recurringCategory: String {
+        var countDict: [UUID: Int] = [:]
+        
+        for expense in viewModel.currentMonthExpensesList {
+            countDict[expense.categoryID, default: 0] += 1
+        }
+        
+        guard let maxID = countDict.max(by: {$0.value < $1.value})?.key,
+              let category = viewModel.category(withID: maxID)
+        else {
+            return "No expenses made"
+        }
+        return category.name
+    }
+ 
+
+    
+    
+    /* VAR budgetStatusText
+     purpose - is user over/under budget
+     return - string
+     */
+    var budgetStatusText: String {
+        // no budget set
+        guard viewModel.isBudgetExist else {
+            return "No budget set" }
+        
+        // over
+        if viewModel.remainingBudget < 0 {
+            return "Over by \(abs(viewModel.remainingBudget).formatted(.currency(code: "USD")))"
+        }
+        
+        // under
+        return "\(viewModel.remainingBudget.formatted(.currency(code: "USD"))) remaining"
+    }
+    
+    
+    /*
+     VAR budgetStatusColor
+     purpose - color code status
+     return - Color
      */
     
-    func getCurrMonthName() -> String {
-        let format = DateFormatter()
-        format.dateFormat = "MMMM yyyy"
-        
-        return format.string(from: Date())
-    }
-    
-    // gets all expenses, groups them by category, and adds up the totals for each category creating pie sections
-    func getCategoryGroups() -> [(category: String, amount: Double, color: Color)] {
-        
-        // using a dictionary to store amount to color of category
-        var categoryDict: [String: (amount: Double, color: Color)] = [:]
-        
-        for expense in currMonthExpList {
-            if let categoryExists = categoryDict[expense.category] {
-                categoryDict[expense.category] = (categoryExists.amount + expense.amount, categoryExists.color)
-            }
-            
-            else {
-                categoryDict[expense.category] = (expense.amount, expense.color)
-            }
-        }
-        
-        return categoryDict.map{(category: $0.key, amount: $0.value.amount, color: $0.value.color)
-            // converting dictionary to array
-        }
-        .sorted {
-            $0.amount > $1.amount
-        }
-    }
-    
-    
-    // has the biggest section in the pie chart = category with the most accumulated money
-    func getTopCategory() -> String {
-        let catGroups = getCategoryGroups()
-        
-        if catGroups.isEmpty {
-            return "No expenses have been made yet"
-        }
+    var budgetStatusColor: Color {
+        // is there a budget, else
+        guard viewModel.isBudgetExist
         else {
-            return catGroups[0].category + ": " + "$" + String(catGroups[0].amount)
+            return .secondary
         }
+        return viewModel.remainingBudget < 0 ? .red : .green
     }
-        
-    // get category with most entries
-    func getRecurringExpense() -> String {
-        
-        var catDict: [String : Int] = [:]
-        catDict["Food"] = 0
-        catDict["Groceries"] = 0
-        catDict["Transportation"] = 0
-        catDict["Clothes"] = 0
-        catDict["Entertainment"] = 0
-        catDict["Rent"] = 0
-        catDict["Other"] = 0
-        
-        for expense in currMonthExpList {
-            catDict[expense.category, default: 0] += 1
-        }
-        
-        var topCat: String = ""
-        var mostNum: Int = 0
-        
-        for (cat, num) in catDict {
-            if num > mostNum {
-                mostNum = num
-                topCat = cat
-            }
-        }
-        return topCat
-    }
-    
 
-    func getOverBudget() -> String {
-        return ""
+    func getCurrentMonthName() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: Date())
     }
     
-   
     
     
-    // ***** VIEW ***** --------------------------------------
+    // header helpers
+    // progress 0...1 for the bar (capped at full)
+    var budgetProgress: Double {
+        guard viewModel.isBudgetExist, viewModel.monthlyBudget > 0 else {
+            return 0
+        }
+        return min(viewModel.currentMonthExpense / viewModel.monthlyBudget, 1.0)
+    }
+
+    // the summary line under the month
+    var budgetHeaderSummary: String {
+        guard viewModel.isBudgetExist
+        else {
+            return "Tap to set a budget"
+        }
+        if viewModel.remainingBudget < 0 {
+            return "Over by \(abs(viewModel.remainingBudget).formatted(.currency(code: "USD")))"
+        }
+        return "\(viewModel.remainingBudget.formatted(.currency(code: "USD"))) left of \(viewModel.monthlyBudget.formatted(.currency(code: "USD")))"
+    }
+
+    // shows "500" not "500.0" when pre-filling the field
+    func budgetString(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(value)
+    }
+    
+    
+    
+    /*
+     add expense BUTTON
+     */
+    var addExpenseButton: some View {
+        Button {
+            showAddExpense = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundColor(theme.current.background)
+                .frame(width: 60, height: 60)
+                .background(Circle().fill(theme.current.accent))
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+        }
+    }
+    
+    // the spendings wrapped - revamp
+    func insightCard(icon: String, iconColor: Color, label: String, value: String, valueColor: Color? = nil) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(iconColor)
+                .frame(width: 38, height: 38)
+                .background(iconColor.opacity(0.18))
+                .cornerRadius(10)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label.uppercased())
+                    .font(.caption2)
+                    .foregroundColor(theme.current.textSecondary)
+                Text(value)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(valueColor ?? theme.current.textPrimary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(theme.current.surface)
+        .cornerRadius(14)
+    }
+    
+    
+    // ***** INSIGHTS VIEW UI ***** --------------------------------------
+    
     var body: some View {
         ZStack {
+            
             ScrollView {
-                VStack {
-                    // current total expense display
-                    Text("$" + String(currMonthExp))
+                VStack(spacing: 8) {
+                    // total spent this month (should not be able to edit)
+                    Text(viewModel.currentMonthExpense.formatted(.currency(code: "USD")))
                         .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    // subheader of month's name
-                    Text(getCurrMonthName())
+                        .foregroundColor(theme.current.textPrimary)
+
+                    Text(getCurrentMonthName())
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
                         .fontWeight(.heavy)
+                        .foregroundColor(theme.current.textSecondary)
+
+                    // budget line — flips between display and edit
+                    if isEditingBudget {
+                        HStack(spacing: 2) {
+                            Text("$").foregroundColor(theme.current.textSecondary)
+                            TextField("0", text: $draftBudget)
+                                .keyboardType(.decimalPad)
+                                .fixedSize()
+                                .focused($budgetFieldFocused)
+                                .foregroundColor(theme.current.accent)
+                                .onAppear {
+                                    // *tiny delay so the field exists before we focus it*
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                        budgetFieldFocused = true
+                                    }
+                                }
+                        }
+                        .font(.callout)
+                        .fontWeight(.medium)
+                    } else {
+                        Button {
+                            draftBudget = viewModel.isBudgetExist ? budgetString(viewModel.monthlyBudget) : ""
+                            isEditingBudget = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(budgetHeaderSummary)
+                                Image(systemName: "pencil").font(.caption2)
+                            }
+                            .font(.caption)
+                            .foregroundColor(viewModel.isBudgetExist ? theme.current.textSecondary : theme.current.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // progress bar (only once a budget exists)
+                    if viewModel.isBudgetExist {
+                        ProgressView(value: budgetProgress)
+                            .tint(viewModel.remainingBudget < 0 ? theme.current.overBudget : theme.current.accent)
+                            .frame(maxWidth: 200)
+                            .padding(.top, 2)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
-                .background(Color(.secondarySystemBackground))
+                .background(theme.current.surface)
                 .cornerRadius(40)
                 .padding(.horizontal)
+                .onChange(of: budgetFieldFocused) { _, focused in
+                    // commit when the user taps Done or taps away
+                    if !focused && isEditingBudget {
+                        if let amount = Double(draftBudget), amount > 0 {
+                            viewModel.updateBudget(amount)
+                        }
+                        isEditingBudget = false   // invalid/empty just reverts
+                    }
+                }
                 
+                
+
                 // pie chart
-                if (!currMonthExpList.isEmpty) { // when rendering: !currMonthExpList
-                    
+                if !viewModel.currentMonthExpensesList.isEmpty {
+
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Currently...")
                             .font(.title2)
                             .fontWeight(.bold)
                             .padding(.horizontal)
                         
-                        Chart(getCategoryGroups(), id: \.category) { item in
+                        Chart(categoryGroups, id: \.category.id) { item in
                             SectorMark(
                                 angle: .value("Amount", item.amount),
                                 innerRadius: .ratio(0.6),
                                 angularInset: 1.5
                             )
-                            .foregroundStyle(item.color)
+                            .foregroundStyle(item.category.color)
                             .cornerRadius(4)
                         }
                         .frame(height: 300)
+                        .overlay { addExpenseButton }
                         .padding(.horizontal)
                         
-                        // INSIGHTS AKA current expense wrapped
-                        
-                        VStack {
-                            Text("MONTHLY WRAP ... at least for now")
-                                .font(.title2)
+                        // INSIGHTS
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Your month, wrapped")
+                                .font(.title3)
                                 .fontWeight(.bold)
-                                .padding(.horizontal)
+                                .foregroundColor(theme.current.textPrimary)
+                                .padding(.bottom, 2)
                             
-                            HStack {
-                                // !!! helper func calculating biggest spending (use getCatGroups as a helper)
-                                Text("🔥 Top Category: " + getTopCategory())
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.red)
-                            .padding(.horizontal)
-                            .fontWeight(.medium)
+                            insightCard(icon: "flame.fill", iconColor: theme.current.overBudget,
+                                        label: "Top category", value: topCategory)
                             
-                            // the category that showed up the most so far
-                            HStack {
-                                Text("💋 Recurring Expense: " + getRecurringExpense())
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.orange)
-                            .padding(.horizontal)
-                            .fontWeight(.medium)
+                            insightCard(icon: "repeat", iconColor: theme.current.underBudget,
+                                        label: "Most frequent", value: recurringCategory)
                             
-                            // calculate the percentage of current spendings/budget and use an emoji scale
-                            HStack {
-                                Text("💰 Are we over-budget? " + getOverBudget())
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.yellow)
-                            .padding(.horizontal)
-                            .fontWeight(.medium)
-                            
-                            
+                            insightCard(icon: "wallet.bifold.fill", iconColor: theme.current.underBudget,
+                                        label: "Budget status", value: budgetStatusText, valueColor: budgetStatusColor)
                         }
-                        
-                        // add expense button
-                        VStack {
-                            Button(action: {
-                                showAddExpense = true }) {
-                                    Image(systemName: "plus")
-                                        .font(.title2)
-                                        .fontWeight(.semibold)
-                                }
-                                .padding(.trailing, 20)
-                                .padding(.bottom, 20)
+                        .padding(.horizontal)
+                        .padding(.bottom, 120)
+                    }
+
+                }
+                else {
+                    // empty state with the button reachable when there are no expenses
+                    VStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .strokeBorder(style: StrokeStyle(lineWidth: 14, dash: [3, 7]))
+                                .foregroundColor(theme.current.textSecondary.opacity(0.35))
+                                .frame(width: 200, height: 200)
+                            addExpenseButton
                         }
+                        Text("No expenses yet — tap + to add one")
+                            .font(.caption)
+                            .foregroundColor(theme.current.textSecondary)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
                 }
-            }
-            
-            // ADD EXPENSE BUTTON
-            VStack {
-                HStack {
-                    Button(action: {
-                        showAddExpense = true
-                    }) {
-                        Image(systemName: "plus")
-                            .fontWeight(.bold)
-                            .foregroundColor(.yellow)
-                            .frame(width: 30, height: 30)
-                            .background(Color.green)
-                            .clipShape(Circle())
-                            .shadow(radius: 4)
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
-                }
+                                
+                
+                
             }
         }
         .sheet(isPresented: $showAddExpense) {
-            AddExpenseView(allExpenses: $allExpenses)
+            AddExpenseView()
         }
-        
+        .background(theme.current.background.ignoresSafeArea())
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { budgetFieldFocused = false }
+            }
+        }
     }
+    
 }
 
 
-// *** for testing purposes 
+
 #Preview {
-    @Previewable @State var testExpenses: [Expense] = [
-            Expense(amount: 50, category: "Food", date: Date(), color: .yellow),
-            Expense(amount: 1200, category: "Rent", date: Date(), color: .brown),
-            Expense(amount: 30, category: "Transportation", date: Date(), color: .orange),
-            Expense(amount: 25, category: "Food", date: Date(), color: .yellow),
-            Expense(amount: 80, category: "Entertainment", date: Date(), color: .purple)
-        ]
-        
-        return InsightsView()
+    InsightsView()
+        .environmentObject(BudgetViewModel())
+        .environment(ThemeManager())
 }
-
