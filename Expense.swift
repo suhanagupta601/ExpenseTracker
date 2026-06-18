@@ -8,11 +8,11 @@
 import SwiftUI
 
 struct Expense: Identifiable {
-    var id = UUID()
+    var id: UUID = UUID()
     var amount: Double
-    var category: String
+    var categoryID: UUID // points to Category ... for any edits to a category/deletions
     var date: Date
-    var color: Color
+    var descr: String = "" // expense description - optional
 }
 
 
