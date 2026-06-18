@@ -1,0 +1,82 @@
+//
+//  AppThemes.swift
+//  ExpenseTracker
+//
+//  Created by Suhana Gupta on 6/16/26.
+//
+
+import SwiftUI
+
+struct AppTheme: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var name: String
+    var isBuiltIn: Bool = false
+
+    // Stored as hex so themes are Codable and user-creatable
+    var backgroundHex: String
+    var surfaceHex: String
+    var textPrimaryHex: String
+    var textSecondaryHex: String
+    var accentHex: String
+    var underBudgetHex: String
+    var overBudgetHex: String
+    var categoryHexes: [String]
+
+    // Convenience accessors — views use these, never raw hex
+    var background: Color    { Color(hex: backgroundHex) ?? .gray }
+    var surface: Color       { Color(hex: surfaceHex) ?? .gray }
+    var textPrimary: Color   { Color(hex: textPrimaryHex) ?? .black }
+    var textSecondary: Color { Color(hex: textSecondaryHex) ?? .gray }
+    var accent: Color        { Color(hex: accentHex) ?? .gray }
+    var underBudget: Color   { Color(hex: underBudgetHex) ?? .green }
+    var overBudget: Color    { Color(hex: overBudgetHex) ?? .red }
+    var categories: [Color]  { categoryHexes.compactMap { Color(hex: $0) } }
+}
+
+extension AppTheme {
+    static let sageGarden = AppTheme(
+        name: "Sage Garden", isBuiltIn: true,
+        backgroundHex: "F6F1E7", surfaceHex: "ECE4D4",
+        textPrimaryHex: "3E3A30", textSecondaryHex: "857A66",
+        accentHex: "7C8C5A", underBudgetHex: "6E7D4A", overBudgetHex: "B5654A",
+        categoryHexes: ["7C8C5A", "A98C5A", "9C8466", "6E7D4A", "B5654A", "857A66"]
+    )
+
+    static let forestOat = AppTheme(
+        name: "Forest Oat", isBuiltIn: true,
+        backgroundHex: "F4EFE3", surfaceHex: "E8DFCB",
+        textPrimaryHex: "36352E", textSecondaryHex: "7E7561",
+        accentHex: "5A7355", underBudgetHex: "4F6A4A", overBudgetHex: "B06A4A",
+        categoryHexes: ["5A7355", "C49A4E", "8A7B5C", "4F6A4A", "B06A4A", "7E7561"]
+    )
+
+    static let mossWalnut = AppTheme(
+        name: "Moss & Walnut", isBuiltIn: true,
+        backgroundHex: "F2EEE2", surfaceHex: "E9E1CE",
+        textPrimaryHex: "383428", textSecondaryHex: "7C7158",
+        accentHex: "6B7A4F", underBudgetHex: "5E6E45", overBudgetHex: "A85F3E",
+        categoryHexes: ["6B7A4F", "9A8458", "6E5A43", "5E6E45", "A85F3E", "7C7158"]
+    )
+
+    static let builtIns = [sageGarden, forestOat, mossWalnut]
+}
+
+
+
+import SwiftUI
+
+@Observable
+final class ThemeManager {
+    var current: AppTheme = .sageGarden
+    var customThemes: [AppTheme] = []      // user-made — persist these later
+
+    var allThemes: [AppTheme] { AppTheme.builtIns + customThemes }
+
+    func select(_ theme: AppTheme) { current = theme }
+
+    func addCustom(_ theme: AppTheme) {
+        var t = theme; t.isBuiltIn = false
+        customThemes.append(t)
+        current = t
+    }
+}
