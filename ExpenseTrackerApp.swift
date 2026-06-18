@@ -1,17 +1,16 @@
-//
-//  ExpenseTrackerApp.swift
-//  ExpenseTracker
-//
-//  Created by Suhana Gupta on 1/5/26.
-//
-
 import SwiftUI
 
 @main
 struct ExpenseTrackerApp: App {
+    @State private var viewModel = BudgetViewModel()
+    @State private var theme = ThemeManager()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(viewModel)
+                .environment(theme)
+
         }
     }
 }
