@@ -1,0 +1,85 @@
+//
+//  BudgetViewModel.swift
+//  ExpenseTracker
+//
+
+import SwiftUI
+import Combine
+
+class BudgetViewModel: ObservableObject {
+    @Published var allExpenses: [Expense] = []
+    @Published var monthlyBudget: Double = 0.0
+    @Published var categories: [Category] = Category.defaults
+    
+    @State private var theme = ThemeManager()
+    
+
+    // filter current month's expenses
+    var currentMonthExpensesList: [Expense] {
+        let calendar = Calendar.current
+        let now = Date()
+        return allExpenses.filter {
+            calendar.isDate($0.date, equalTo: now, toGranularity: .month)
+        }
+    }
+    
+    // add curr month's expenses
+    var currentMonthExpense: Double {
+        currentMonthExpensesList.reduce(0) {
+            $0 + $1.amount
+        }
+    }
+    
+    var remainingBudget: Double {
+        monthlyBudget - currentMonthExpense
+    }
+    
+    var isBudgetExist: Bool {
+        monthlyBudget > 0
+    }
+    
+    // MARK: - Category Lookups
+
+    // get first category matching expense
+    func category(for expense: Expense) -> Category? {
+        categories.first { $0.id == expense.categoryID }
+    }
+
+    // look up category directly by id
+    func category(withID id: UUID) -> Category? {
+        categories.first { $0.id == id }
+    }
+    
+    // MARK: - Data Helpers
+
+    func addExpense(_ expense: Expense) {
+        allExpenses.append(expense)
+    }
+    
+    func deleteExpense(_ expense: Expense) {
+        allExpenses.removeAll { $0.id == expense.id }
+    }
+    
+    func updateBudget(_ newAmount: Double) {
+        monthlyBudget = newAmount
+    }
+    
+    func addCategory(_ category: Category) {
+        categories.append(category)
+    }
+    
+    func deleteCategory(_ category: Category) {
+        // don't delete if it's in use
+        let inUse = allExpenses.contains { $0.categoryID == category.id }
+        guard !inUse else { return }
+        categories.removeAll { $0.id == category.id }
+    }
+    
+    func updateCategory(_ category: Category) {
+        if let index = categories.firstIndex(where: { $0.id == category.id }) {
+            categories[index] = category
+        }
+    }
+}
+
+
