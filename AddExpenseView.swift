@@ -12,93 +12,41 @@ import SwiftUI
 
 struct AddExpenseView: View {
     @Environment(\.dismiss) var dismiss
-    @Binding var allExpenses: [Expense] // need to add new expense to list (update everything)
-    
+    @EnvironmentObject var viewModel: BudgetViewModel
+
     @State private var amount: String = ""
-    @State private var category: String = ""
+    @State private var selectedCategory: Category? = nil
     @State private var date: Date = Date()
-    
-    @State private var otherCategory: String = ""
-    @State private var otherColor: Color = .blue
-    @State private var showOtherCategory: Bool = false
-    
-    
-    @State private var categoryColors: [String: Color] = [
-        "Food": .yellow,
-        "Groceries": .green,
-        "Transportation": .orange,
-        "Clothes": .pink,
-        "Entertainment": .purple,
-        "Rent": .brown,
-        "Other": .gray
-    ]
-    
-    let categories: [String] = ["Food", "Groceries", "Transportation", "Clothes", "Entertainment", "Rent", "Other"]
-    
-    
-    // ***** HELPER FUNCs ***** --------------------------------------
-    
+    @State private var descr: String = ""
+
+    // HELPER FUNCTIONS ------------>
+
     func addExpense() {
-        /*
-         - add this new expense to the allExpenses list as an EXPENSE
-         - add it to the pie chart
-         - add to history // LATER //
-         
-         - extract information inputted into variables as an Expense Struct
-         */
-        if let amountDoub = Double(amount) {
-            let newExpense = Expense (
-                amount: amountDoub,
-                category: category,
-                date: date,
-                color: getCategoryColor(ctg: category)
-            )
-            
-            allExpenses.append(newExpense)
-            
-            dismiss()
-        }
-        
-        else {
-            print("Invalid amount. Enter a decimal value number.")
+        // validate amount is a real number
+        guard let amountDouble = Double(amount), amountDouble > 0 else {
+            print("Invalid amount.")
             return
         }
-    }
-    
-    func getCategoryColor(ctg: String) -> Color {
-        switch ctg {
-            
-        case "Food":
-            return .yellow
-            
-        case "Groceries":
-            return .green
-            
-        case "Transportation":
-            return .orange
-            
-        case "Clothes":
-            return .pink
-            
-        case "Entertainment":
-            return .purple
-            
-        case "Rent":
-            return .brown
-            
-            // change into drop down for color choosing and entering custom color //LATER//
-        case "Other":
-            return .gray
-            
-        default:
-            return .black
+
+        // validate a category was selected
+        guard let category = selectedCategory else {
+            print("No category selected.")
+            return
         }
-        
+
+        let newExpense = Expense(
+            amount: amountDouble,
+            categoryID: category.id,
+            date: date,
+            descr: descr
+        )
+
+        viewModel.addExpense(newExpense)
+        dismiss()
     }
-    
-    
-    
-    // ***** VIEW ***** --------------------------------------
+
+    // MARK: - View
+
     var body: some View {
         NavigationView {
             Form {
@@ -109,36 +57,34 @@ struct AddExpenseView: View {
                             .keyboardType(.decimalPad)
                     }
                 }
-                
-                // makae it into a dropdown menu
+
                 Section(header: Text("Category")) {
-                    Picker("Category", selection: $category) {
-                        ForEach(categories, id: \.self) { cat in
-                            Text(cat).tag(cat)
-                        }
-                    }
-                    
-                    .onChange(of: category) {
-                        oldValue,
-                        newValue in
-                        
-                        if (newValue == "Other") {
-                            showOtherCategory = true
+                    Picker("Category", selection: $selectedCategory) {
+                        Text("Select a category").tag(Category?.none)
+                        ForEach(viewModel.categories) { cat in
+                            HStack {
+                                Image(systemName: cat.icon)
+                                    .foregroundColor(cat.color)
+                                Text(cat.name)
+                            }
+                            .tag(Category?.some(cat))
                         }
                     }
                 }
-                
+
                 Section(header: Text("Date")) {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                 }
-                
-                
-                
+
+                Section(header: Text("Description (optional)")) {
+                    TextField("e.g. Lunch with friends", text: $descr)
+                }
+
                 Section {
                     Button("Add Expense") {
                         addExpense()
                     }
-                    .disabled(amount.isEmpty || category.isEmpty)
+                    .disabled(amount.isEmpty || selectedCategory == nil)
                 }
             }
             .navigationTitle("New Expense")
@@ -154,3 +100,7 @@ struct AddExpenseView: View {
     }
 }
 
+#Preview {
+    AddExpenseView()
+    @EnvironmentObject var viewModel: BudgetViewModel
+}
