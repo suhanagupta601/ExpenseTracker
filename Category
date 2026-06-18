@@ -1,0 +1,59 @@
+//
+//  Category.swift
+//  ExpenseTracker
+//
+//  Created by Suhana Gupta on 5/22/26.
+//
+
+import SwiftUI
+
+struct Category: Identifiable, Hashable {
+    var id: UUID = UUID()
+    var name: String
+    var colorHex: String
+    var icon: String
+    var budget: Double?
+    
+    
+    // invalid color -> fallback = gray
+    var color: Color {
+        Color(hex: colorHex) ?? .gray
+        
+    }
+    
+    
+    
+    // default categories
+    static let defaults: [Category] = [
+        Category(name: "Food",
+                 colorHex: "#D4A574",
+                 icon: "fork.knife"),
+        Category(name: "Groceries", colorHex: "#8B6F4E", icon: "cart"),
+        
+        Category(name:"Transportation", colorHex: "#B85C3E", icon: "car"),
+        Category(name: "Rent", colorHex:"#A66A47", icon: "house"),
+        Category(name: "Entertainment",  colorHex: "#E5C9A1", icon: "music.note"),
+        Category(name: "Other",          colorHex: "#8B8478", icon: "ellipsis.circle")
+    ]
+}
+
+// Helper- build a SwiftUI Color from a hex string like "#A66A47"
+extension Color {
+    init?(hex: String) {
+        var hexString = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexString = hexString.replacingOccurrences(of: "#", with: "")
+        
+        guard hexString.count == 6,
+              let rgbValue = UInt64(hexString, radix: 16) else {
+            return nil
+        }
+        
+        let r = Double((rgbValue >> 16) & 0xFF) / 255.0
+        let g = Double((rgbValue >> 8) & 0xFF) / 255.0
+        let b = Double(rgbValue & 0xFF) / 255.0
+        
+        self.init(red: r, green: g, blue: b)
+    }
+}
+
+
