@@ -1,9 +1,3 @@
-//
-//  LoginView.swift
-//  ExpenseTracker
-//
-//  Created by Suhana Gupta on 1/5/26.
-//
 
 // @State creates a local var that swiftUI tracks for changes (mutable)
 // $ = binding to that state var
@@ -19,7 +13,7 @@ struct LoginView: View {
     
     
     
-    
+    // LOGIN VIEW
     var body: some View {
         VStack {
             Text("Expense Tracker (logo)")
@@ -77,6 +71,7 @@ struct LoginView: View {
 
 #Preview {
     LoginView(isLogin: .constant(false))
+        .environment(ThemeManager())
 }
 
 
