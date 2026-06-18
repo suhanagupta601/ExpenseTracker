@@ -1,10 +1,5 @@
-//
-//  ContentView.swift
-//  ExpenseTracker
-//
-//  Created by Suhana Gupta on 1/5/26.
-//
 
+// login page -> main page with tabs on bottom and pie chart
 import SwiftUI
 
 struct ContentView: View {
@@ -68,4 +63,6 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(BudgetViewModel())
+        .environment(ThemeManager())
 }
